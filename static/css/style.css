@@ -1,0 +1,151 @@
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: #fff;
+  color: #222;
+  margin: 0;
+  padding: 0;
+}
+
+.header {
+  padding: 2rem;
+  background-color: #b30000;
+  color: #fff;
+  text-align: center;
+}
+
+a {
+  color: #e60000;
+}
+
+button, .btn {
+  background-color: #e60000;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #cc0000;
+}
+
+.card {
+  background: #fdfdfd;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+  margin: 2rem auto;
+  max-width: 700px;
+  text-align: center;
+}
+
+.score-bar {
+  height: 20px;
+  border-radius: 10px;
+  background: #ddd;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.score-bar-inner {
+  height: 100%;
+}
+
+/* Specific color themes for score types */
+.score-legitimacy {
+  background-color: #4CAF50;
+}
+
+.score-malicious {
+  background-color: #d32f2f;
+}
+
+.score-unworthy {
+  background-color: #f57c00;
+}
+
+/* Add to existing CSS */
+.loading {
+    text-align: center;
+    padding: 2rem;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    margin: 20px auto;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #b30000;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.result-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.product-info {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #eee;
+}
+
+.score-section {
+    margin-bottom: 2rem;
+}
+
+.score-bar {
+    height: 24px;
+    background: #eee;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 1rem 0;
+}
+
+.score-bar-inner {
+    height: 100%;
+    transition: width 0.5s ease;
+}
+
+.score-label {
+    font-size: 1.2rem;
+    font-weight: bold;
+    text-align: center;
+}
+
+.risk-scores {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.risk-item {
+    flex: 1;
+    padding: 1rem;
+    background: #f8f8f8;
+    border-radius: 8px;
+}
+
+.expert-analysis {
+    background: #f8f8f8;
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+.error-message {
+    color: #d32f2f;
+    text-align: center;
+    padding: 2rem;
+    background: #ffebee;
+    border-radius: 8px;
+}
