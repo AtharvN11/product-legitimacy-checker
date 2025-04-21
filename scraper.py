@@ -1,197 +1,307 @@
+# universal_scraper.py
+
 import requests
 from bs4 import BeautifulSoup
 import re
-import time
-import random
+from typing import Dict, List, Optional
 import logging
-from urllib.parse import urljoin, urlparse
+import json
+from urllib.parse import urljoin
 
-# Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Extended User-Agent list with modern browser strings
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-]
+class UniversalScraper:
+    def __init__(self):
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache"
+        }
+        self.currency_symbols = r'[$€£¥]|EUR|USD|GBP|JPY'
+        self.price_regex = fr'(?:{self.currency_symbols})\s*[0-9]+(?:[.,][0-9]{{2}})?|\b[0-9]+(?:[.,][0-9]{{2}})?\s*(?:{self.currency_symbols})'
 
-def get_random_headers():
-    """Generate random headers that look more like a real browser"""
-    return {
-        "User-Agent": random.choice(USER_AGENTS),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Cache-Control": "max-age=0",
-        "DNT": "1"
-    }
+    def make_request(self, url: str) -> Optional[str]:
+        try:
+            session = requests.Session()
+            response = session.get(url, headers=self.headers, timeout=15)
+            response.raise_for_status()
+            return response.text
+        except Exception as e:
+            logger.error(f"Request failed for {url}: {e}")
+            return None
 
-def extract_asin(url):
-    """Extract ASIN using multiple patterns"""
-    if not url:
-        return None
-    
-    # Normalize URL
-    url = url.replace("/ref=", "/").split("/ref=")[0]
-    
-    patterns = [
-        r"/dp/([A-Z0-9]{10})/?",
-        r"/product/([A-Z0-9]{10})/?",
-        r"/gp/product/([A-Z0-9]{10})/?",
-        r"amazon\.com.*?/([A-Z0-9]{10})/?",
-        r"^([A-Z0-9]{10})$"
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, url)
+    def extract_json_ld(self, soup) -> List[Dict]:
+        """Extract and parse all JSON-LD data from the page"""
+        json_ld_data = []
+        scripts = soup.find_all('script', type='application/ld+json')
+        for script in scripts:
+            try:
+                data = json.loads(script.string)
+                if isinstance(data, list):
+                    json_ld_data.extend(data)
+                else:
+                    json_ld_data.append(data)
+            except:
+                continue
+        return json_ld_data
+
+    def extract_meta_data(self, soup) -> Dict:
+        """Extract metadata from meta tags"""
+        meta_data = {}
+        meta_tags = soup.find_all('meta')
+        for tag in meta_tags:
+            property_name = tag.get('property', tag.get('name', ''))
+            content = tag.get('content', '')
+            if property_name and content:
+                meta_data[property_name.lower()] = content
+        return meta_data
+
+    def clean_price(self, price_str: str) -> Optional[str]:
+        """Clean and standardize price string"""
+        if not price_str:
+            return None
+        # Remove whitespace and convert to lowercase
+        price_str = price_str.strip().lower()
+        # Extract numbers and currency
+        match = re.search(self.price_regex, price_str)
         if match:
-            return match.group(1)
-    return None
+            price = match.group(0)
+            # Standardize format
+            price = price.replace(',', '.')
+            # Ensure currency symbol is present
+            if not any(sym in price for sym in ['$', '€', '£', '¥']):
+                if 'eur' in price_str:
+                    price = f'€{price}'
+                elif 'usd' in price_str:
+                    price = f'${price}'
+                elif 'gbp' in price_str:
+                    price = f'£{price}'
+                elif 'jpy' in price_str:
+                    price = f'¥{price}'
+            return price
+        return None
 
-def get_review_pages(asin, max_pages=2):
-    """Fetch review pages with multiple fallback methods"""
-    reviews = []
-    session = requests.Session()
-    
-    # Define multiple review page URL patterns
-    base_urls = [
-        f"https://www.amazon.com/product-reviews/{asin}",
-        f"https://www.amazon.com/dp/{asin}/reviews",
-        f"https://www.amazon.com/gp/customer-reviews/ajax/{asin}"
-    ]
-    
-    # Try different sorting methods
-    sort_params = [
-        "?sortBy=recent&pageNumber=",
-        "?ie=UTF8&pageNumber=",
-        "?filterByStar=all_stars&pageNumber="
-    ]
-    
-    for base_url in base_urls:
-        if len(reviews) >= 5:  # If we have enough reviews, stop
-            break
-            
-        for sort_param in sort_params:
-            if len(reviews) >= 5:
-                break
+    def extract_price(self, soup) -> Optional[str]:
+        # Method 1: JSON-LD data
+        json_ld_data = self.extract_json_ld(soup)
+        for data in json_ld_data:
+            if isinstance(data, dict):
+                # Check for various JSON-LD price patterns
+                price = None
+                if 'offers' in data:
+                    offers = data['offers']
+                    if isinstance(offers, dict):
+                        price = offers.get('price')
+                    elif isinstance(offers, list) and offers:
+                        price = offers[0].get('price')
+                elif 'price' in data:
+                    price = data['price']
                 
-            for page in range(1, max_pages + 1):
-                try:
-                    # Random delay between requests
-                    time.sleep(random.uniform(1.0, 2.0))
-                    
-                    url = f"{base_url}{sort_param}{page}"
-                    logger.info(f"Trying URL: {url}")
-                    
-                    response = session.get(
-                        url,
-                        headers=get_random_headers(),
-                        timeout=15
-                    )
-                    
-                    if response.status_code != 200:
-                        logger.warning(f"Got status code {response.status_code} for {url}")
-                        continue
-                    
-                    soup = BeautifulSoup(response.text, "html.parser")
-                    
-                    # Multiple patterns for review elements
-                    review_patterns = [
-                        {"data-hook": "review"},
-                        {"class": "review"},
-                        {"class": "a-section review aok-relative"},
-                        {"class": "a-section celwidget"}
-                    ]
-                    
-                    for pattern in review_patterns:
-                        review_elements = soup.find_all("div", pattern)
-                        
-                        if review_elements:
-                            for element in review_elements:
-                                review_text = None
-                                
-                                # Try different review text selectors
-                                text_selectors = [
-                                    "span[data-hook='review-body']",
-                                    "div.review-text",
-                                    "div[data-hook='review-collapsed']",
-                                    "span.a-size-base.review-text"
-                                ]
-                                
-                                for selector in text_selectors:
-                                    review_part = element.select_one(selector)
-                                    if review_part:
-                                        review_text = review_part.get_text(strip=True)
-                                        if review_text and len(review_text) > 20:  # Minimum review length
-                                            reviews.append(review_text)
-                                            break
+                if price:
+                    cleaned_price = self.clean_price(str(price))
+                    if cleaned_price:
+                        return cleaned_price
+
+        # Method 2: Meta tags
+        meta_data = self.extract_meta_data(soup)
+        for key, value in meta_data.items():
+            if 'price' in key:
+                cleaned_price = self.clean_price(value)
+                if cleaned_price:
+                    return cleaned_price
+
+        # Method 3: Common price selectors with priority
+        price_selectors = [
+            '[data-price]',
+            '[itemprop="price"]',
+            '.product-price [content]',
+            '.price-value',
+            '.price--withoutTax',
+            '.price--withTax',
+            '.product__price',
+            '[class*="price"]',
+            '[id*="price"]',
+            'span.amount',
+            '.sale-price'
+        ]
+        
+        for selector in price_selectors:
+            elements = soup.select(selector)
+            for element in elements:
+                # Try data attributes first
+                price_candidates = [
+                    element.get('data-price'),
+                    element.get('content'),
+                    element.get('value'),
+                    element.get_text()
+                ]
                 
-                except Exception as e:
-                    logger.error(f"Error fetching reviews: {e}")
-                    continue
-    
-    return list(set(reviews))  # Remove duplicates
+                for candidate in price_candidates:
+                    if candidate:
+                        cleaned_price = self.clean_price(candidate)
+                        if cleaned_price:
+                            return cleaned_price
 
-def scrape_amazon_product(url):
-    """Scrape Amazon product with improved error handling and multiple fallback methods"""
-    try:
-        asin = extract_asin(url)
-        if not asin:
-            return {"error": "Invalid Amazon URL or ASIN not found."}
+        return None
 
-        session = requests.Session()
+    def clean_rating(self, rating_str: str) -> Optional[str]:
+        """Clean and standardize rating string"""
+        if not rating_str:
+            return None
+        # Extract number from string
+        match = re.search(r'([0-9]{1,2}(?:\.[0-9]{1,2})?)', rating_str)
+        if match:
+            rating = float(match.group(1))
+            # Normalize to 5-star scale if necessary
+            if rating > 5:
+                rating = (rating * 5) / 10
+            return f"{rating:.1f}"
+        return None
+
+    def extract_rating(self, soup) -> Optional[str]:
+        # Method 1: JSON-LD data
+        json_ld_data = self.extract_json_ld(soup)
+        for data in json_ld_data:
+            if isinstance(data, dict):
+                if 'aggregateRating' in data:
+                    rating = data['aggregateRating'].get('ratingValue')
+                    if rating:
+                        return self.clean_rating(str(rating))
+
+        # Method 2: Meta tags
+        meta_data = self.extract_meta_data(soup)
+        for key, value in meta_data.items():
+            if 'rating' in key:
+                cleaned_rating = self.clean_rating(value)
+                if cleaned_rating:
+                    return cleaned_rating
+
+        # Method 3: Common rating selectors
+        rating_selectors = [
+            '[data-rating]',
+            '[itemprop="ratingValue"]',
+            '.rating-value',
+            '.product-rating',
+            '[class*="rating"]',
+            '[class*="stars"]',
+            '.average-rating'
+        ]
         
-        # Try to get product info first
-        response = session.get(
-            f"https://www.amazon.com/dp/{asin}",
-            headers=get_random_headers(),
-            timeout=10
-        )
+        for selector in rating_selectors:
+            elements = soup.select(selector)
+            for element in elements:
+                # Try multiple attributes
+                rating_candidates = [
+                    element.get('data-rating'),
+                    element.get('content'),
+                    element.get('value'),
+                    element.get_text()
+                ]
+                
+                for candidate in rating_candidates:
+                    if candidate:
+                        cleaned_rating = self.clean_rating(candidate)
+                        if cleaned_rating:
+                            return cleaned_rating
+
+        return None
+
+    def clean_review(self, review_text: str) -> Optional[str]:
+        """Clean and validate review text"""
+        if not review_text:
+            return None
+        # Remove extra whitespace and normalize
+        review = ' '.join(review_text.split())
+        # Remove very short or invalid reviews
+        if len(review.split()) < 3 or len(review) < 10:
+            return None
+        # Remove likely non-review content
+        if any(x in review.lower() for x in ['404', 'error', 'javascript', 'cookie']):
+            return None
+        return review
+
+    def extract_reviews(self, soup) -> List[str]:
+        reviews = set()  # Use set to avoid duplicates
+
+        # Method 1: JSON-LD data
+        json_ld_data = self.extract_json_ld(soup)
+        for data in json_ld_data:
+            if isinstance(data, dict):
+                # Handle different review formats in JSON-LD
+                review_data = []
+                if 'review' in data:
+                    review_data.extend(data['review'] if isinstance(data['review'], list) else [data['review']])
+                if 'reviews' in data:
+                    review_data.extend(data['reviews'] if isinstance(data['reviews'], list) else [data['reviews']])
+                
+                for review in review_data:
+                    if isinstance(review, dict):
+                        review_text = review.get('reviewBody', review.get('description'))
+                        if review_text:
+                            cleaned_review = self.clean_review(review_text)
+                            if cleaned_review:
+                                reviews.add(cleaned_review)
+
+        # Method 2: Common review selectors
+        review_selectors = [
+            '[itemprop="reviewBody"]',
+            '.review-content',
+            '.review-text',
+            '.review-body',
+            '[class*="review-"]',
+            '[class*="comment-"]',
+            '.user-review'
+        ]
         
-        if response.status_code != 200:
-            return {"error": "Unable to access product page"}
-            
-        soup = BeautifulSoup(response.text, "html.parser")
+        for selector in review_selectors:
+            elements = soup.select(selector)
+            for element in elements:
+                review_text = element.get_text()
+                cleaned_review = self.clean_review(review_text)
+                if cleaned_review:
+                    reviews.add(cleaned_review)
+
+        # Convert set to list and limit the number of reviews
+        return list(reviews)[:30]  # Increased limit to 30 reviews
+
+    def get_product_info(self, url: str) -> Dict:
+        html = self.make_request(url)
+        if not html:
+            return {"error": "Failed to fetch product info"}
+
+        soup = BeautifulSoup(html, 'html.parser')
         
-        # Quick extraction of basic info
-        title = soup.find(id="productTitle")
-        title = title.get_text(strip=True) if title else "N/A"
-        
-        price = soup.find("span", class_="a-price-whole")
-        price = price.get_text(strip=True) if price else "N/A"
-        
-        rating = soup.find("span", {"data-hook": "rating-out-of-text"})
-        rating = rating.get_text(strip=True) if rating else "N/A"
-        
-        # Get minimum required reviews
-        reviews = get_review_pages(asin, max_pages=2)  # Only get 2 pages
-        
-        if not reviews:
-            reviews = ["Sample review for testing"] * 3
-        
+        # Get basic product info
+        title = self.extract_title(soup)
+        price = self.extract_price(soup)
+        rating = self.extract_rating(soup)
+        reviews = self.extract_reviews(soup)
+
         return {
-            "title": title,
-            "price": price,
-            "rating": rating,
-            "reviews": reviews[:5]  # Limit to 5 reviews
+            "title": title or "Could not extract",
+            "price": price or "Could not extract",
+            "rating": rating or "Could not extract",
+            "reviews": reviews if reviews else ["No reviews found"]
         }
 
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        return {"error": str(e)}
+    def extract_title(self, soup) -> Optional[str]:
+        selectors = [
+            'meta[property="og:title"]',
+            'meta[name="title"]',
+            'h1',
+            'title'
+        ]
+        for sel in selectors:
+            tag = soup.select_one(sel)
+            if tag:
+                return tag.get("content") if tag.has_attr("content") else tag.get_text(strip=True)
+        return None
 
-if __name__ == "__main__":
-    # Test the scraper
-    test_url = "https://www.amazon.com/dp/B07FZ8S74R"
-    result = scrape_amazon_product(test_url)
-    print(result)
+# Create singleton instance and expose scrape_product function
+_scraper = UniversalScraper()
+
+def scrape_product(url: str) -> Dict:
+    return _scraper.get_product_info(url)
