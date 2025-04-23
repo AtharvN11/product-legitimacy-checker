@@ -6,7 +6,6 @@ import re
 from typing import Dict, List, Optional
 import logging
 import json
-from urllib.parse import urljoin
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
