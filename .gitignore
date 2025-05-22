@@ -35,7 +35,6 @@ ENV/
 
 # Project specific
 *.pkl
-test.csv
 
 # Jupyter Notebook
 .ipynb_checkpoints
