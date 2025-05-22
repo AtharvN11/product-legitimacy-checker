@@ -7,7 +7,8 @@ from sklearn.svm import SVC
 from sklearn.metrics import classification_report, accuracy_score
 
 # Load your dataset
-df = pd.read_csv("test.csv")
+url = 'https://raw.githubusercontent.com/AdishNair/product-legitimacy-checker/main/test.csv'
+df = pd.read_csv(url)
 
 # Check columns
 required_columns = ["class_index", "review_title", "review_text"]
