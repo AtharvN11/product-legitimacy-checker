@@ -1,85 +1,81 @@
-document.addEventListener("DOMContentLoaded", () => {
-    const form = document.getElementById("url-form");
-    const resultContainer = document.getElementById("result");
-  
-    form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-  
-        const url = document.getElementById("url").value;
-        resultContainer.innerHTML = `
-            <div class="loading">
-                <p>Analyzing product... Please wait</p>
-                <div class="spinner"></div>
-            </div>
-        `;
-  
-        try {
-            const res = await fetch("/", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: `url=${encodeURIComponent(url)}`
-            });
-  
-            const data = await res.json();
-  
-            if (data.error) {
-                resultContainer.innerHTML = `
-                    <div class="error-message">
-                        <h3>⚠️ Error</h3>
-                        <p>${data.error}</p>
-                    </div>`;
-                return;
-            }
-  
-            // Calculate color based on legitimacy score
-            const scoreColor = data.confidence >= 70 ? '#4CAF50' : 
-                             data.confidence >= 50 ? '#FFA726' : '#F44336';
-  
-            resultContainer.innerHTML = `
-                <div class="result-card">
-                    <h2>Analysis Results</h2>
-                    
-                    <div class="product-info">
-                        <h3>${data.title}</h3>
-                        <p><strong>Price:</strong> ${data.price}</p>
-                        <p><strong>Rating:</strong> ${data.rating}</p>
-                    </div>
+async function scrape() {
+  const url = document.getElementById("urlInput").value.trim();
+  const loading = document.getElementById("loading");
+  const result = document.getElementById("result");
 
-                    <div class="score-section">
-                        <h3>Legitimacy Score</h3>
-                        <div class="score-bar">
-                            <div class="score-bar-inner" 
-                                 style="width: ${data.confidence}%; background-color: ${scoreColor}">
-                            </div>
-                        </div>
-                        <p class="score-label" style="color: ${scoreColor}">
-                            ${data.confidence}% Legitimate
-                        </p>
-                    </div>
+  if (!url) {
+    result.innerHTML = `<p style="color:red;">Please enter a valid Amazon product URL.</p>`;
+    return;
+  }
 
-                    <div class="risk-scores">
-                        <div class="risk-item">
-                            <h4>Risk Assessment</h4>
-                            <p>Malicious Score: ${data.malicious_score}%</p>
-                            <p>Unworthy Score: ${data.unworthy_score}%</p>
-                        </div>
-                    </div>
+  loading.style.display = "block";
+  result.innerHTML = "";
 
-                    <div class="expert-analysis">
-                        <h4>Expert Analysis</h4>
-                        <p>${data.reason}</p>
-                    </div>
-                </div>`;
-        } catch (err) {
-            console.error("Error:", err);
-            resultContainer.innerHTML = `
-                <div class="error-message">
-                    <h3>⚠️ Error</h3>
-                    <p>Something went wrong. Please try again.</p>
-                </div>`;
-        }
+  try {
+    const response = await fetch("/scrape", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
     });
-});
-  
+
+    const data = await response.json();
+    console.log("RESPONSE JSON:", data);
+    loading.style.display = "none";
+
+    if (!response.ok) {
+      console.error("Backend error:", data);
+      result.innerHTML = `<p style="color:red;">${data.error || "An unknown error occurred."}</p>`;
+      return;
+    }
+
+    // Handle insufficient review case
+    // if (data.status === "insufficient_reviews") {
+    //   result.innerHTML = `
+    //     <div class="warning p-3 bg-warning-subtle border rounded">
+    //       <h4 class="text-warning">⚠️ Insufficient Reviews</h4>
+    //       <p>${data.message}</p>
+    //     </div>`;
+    //   return;
+    // }
+
+    // Determine card color based on legitimacy
+    let bgColor = "#f8d7da", verdict = "Likely Scam", badge = "danger";
+    if (data.confidence >= 70) {
+      bgColor = "#d4edda";
+      verdict = "Legitimate";
+      badge = "success";
+    } else if (data.confidence >= 50) {
+      bgColor = "#fff3cd";
+      verdict = "Suspicious";
+      badge = "warning";
+    }
+
+    // Render legitimacy metrics
+    result.innerHTML = `
+      <div class="result-card p-4 rounded shadow-sm mb-4" style="background-color: ${bgColor};">
+        <h3>ASIN: ${data.asin}</h3>
+        <p><strong>Legitimacy Score:</strong> ${data.confidence}%</p>
+        <p><strong>Fake Review Estimate:</strong> ${data.fake_review_percent}%</p>
+        <p><strong>Unworthy Score:</strong> ${data.unworthy_score}%</p>
+        <p><strong>Verdict:</strong> <span class="badge bg-${badge}">${verdict}</span></p>
+        <hr/>
+        <h4>Top Reviews:</h4>
+      </div>`;
+
+    // Append reviews
+    data.reviews.slice(0, 5).forEach((r) => {
+      result.innerHTML += `
+        <div class="review shadow-sm mb-3 p-3 rounded">
+          <h5>${r.title || "No Title"}</h5>
+          <p><strong>Author:</strong> ${r.author || "Unknown"}</p>
+          <p><strong>Rating:</strong> ${r.rating || "N/A"}/5</p>
+          <p>${(r.content || "No content available.").slice(0, 300)}...</p>
+        </div>`;
+    });
+
+  } catch (err) {
+    console.error("Request failed:", err);
+    loading.style.display = "none";
+    result.innerHTML = `<p style="color:red;">Something went wrong. Please try again later.</p>`;
+  }
+}
