@@ -24,13 +24,9 @@ classifier = pipeline(
     padding=True
 )
 
-def extract_asin_and_domain(url):
-    match = re.search(r"amazon\.(\w+).*?/([dg]p/product|dp)/([A-Z0-9]{10})", url)
-    if match:
-        tld = match.group(1)
-        asin = match.group(3)
-        return asin, tld
-    return None, None
+def extract_asin(url):
+    match = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", url)
+    return match.group(1) if match else None
 
 @app.route("/")
 def home():
@@ -38,33 +34,24 @@ def home():
 
 @app.route("/scrape", methods=["POST"])
 def scrape_reviews():
-    import json
-
     data = request.get_json(force=True)
     url = data.get("url", "").strip()
-    asin = extract_asin_and_domain(url)
+    asin = extract_asin(url)
     if not asin:
         return jsonify({"error": "Invalid Amazon URL"}), 400
 
-    # Ensure old CSV is removed to avoid stale predictions
     try:
         if os.path.exists(CSV_FILE):
             os.remove(CSV_FILE)
     except Exception as e:
         app.logger.warning(f"Could not remove old CSV: {e}")
 
-    # === Step 1: Scrape reviews via Make ===
     try:
-        subprocess.run(
-            ["make", "scrape", f"ASIN_CODE={asin}"],
-            cwd=SCRAPER_DIR,
-            check=True
-        )
+        subprocess.run(["make", "scrape", f"ASIN_CODE={asin}"], cwd=SCRAPER_DIR, check=True)
     except subprocess.CalledProcessError as e:
         app.logger.error(f"Scraper subprocess failed: {e}")
         return jsonify({"error": "Scraping process failed"}), 500
 
-    # === Step 2: Read the generated CSV ===
     if not os.path.exists(CSV_FILE):
         return jsonify({"error": "No reviews found or scraper failed silently."}), 500
 
@@ -77,7 +64,6 @@ def scrape_reviews():
     if df.empty:
         return jsonify({"error": "CSV file is empty. No reviews extracted."}), 200
 
-    # === Step 3: Prepare review list ===
     reviews = []
     for _, row in df.iterrows():
         reviews.append({
@@ -97,7 +83,6 @@ def scrape_reviews():
             "reviews": reviews
         })
 
-    # === Step 4: Run BERT classifier ===
     try:
         preds = classifier(texts, batch_size=8)
     except Exception as e:
@@ -110,7 +95,6 @@ def scrape_reviews():
         malicious_probs.append(scores.get("malicious", 0))
         unworthy_probs.append(scores.get("unworthy", 0))
 
-    # === Step 5: Metrics ===
     n = len(malicious_probs)
     legitimacy_score = (sum([1 - x for x in malicious_probs]) / n) * 100
     fake_review_percent = 100 - legitimacy_score
@@ -123,4 +107,3 @@ def scrape_reviews():
         "unworthy_score": round(unworthy_score, 2),
         "reviews": reviews
     })
-
