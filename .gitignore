@@ -55,4 +55,11 @@ logs/
 
 # OS specific
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+bert_local/
+special_tokens_map.json
+tokenizer_config.json
+config.json
+ 
+ 

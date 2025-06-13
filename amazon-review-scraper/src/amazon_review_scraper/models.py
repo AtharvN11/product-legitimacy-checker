@@ -8,5 +8,5 @@ from pydantic import BaseModel
 class Review(BaseModel):
     author: str
     content: str
-    rating: int
+    rating: float
     title: str
