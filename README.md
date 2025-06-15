@@ -1,24 +1,24 @@
 # Product Legitimacy Checker
 
-A web application that analyzes Amazon product reviews to determine the legitimacy of products and detect potential scams.
+A web application that analyzes Amazon product reviews to determine the legitimacy of products and detect potential scams using a fine-tuned BERT model.
 
 ## Features
 
-- Amazon product review scraping
-- ML-based review analysis
-- Legitimacy scoring
-- Risk assessment
-- User-friendly interface
+- Amazon product review scraping  
+- BERT-based review classification  
+- Legitimacy scoring & scam detection  
+- Risk assessment per product  
+- User-friendly web interface
 
 ## Installation
 
-1. Clone the repository:
+1. **Clone the repository:**
 ```bash
 git clone https://github.com/yourusername/product-legitimacy-checker.git
 cd product-legitimacy-checker
 ```
 
-2. Create and activate a virtual environment:
+2. **Create and activate a virtual environment:**
 ```bash
 python -m venv .venv
 # On Windows
@@ -27,62 +27,76 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-3. Install dependencies:
+3. **Install dependencies:**
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Run the application:
+4. **Train the model (Required before first run):**
+```bash
+python bert_fake_review_classifier.py
+```
+
+This will train and save the BERT model used to classify reviews as real or fake.
+
+5. **Run the application:**
 ```bash
 python app.py
 ```
 
-5. Open your browser and navigate to `http://localhost:5000`
+6. **Open your browser and navigate to:**
+```
+http://localhost:5000
+```
 
 ## Usage
 
-1. Enter an Amazon product URL in the input field
-2. Click "Analyze"
-3. View the detailed analysis results including:
-   - Legitimacy score
+1. Paste an Amazon product URL into the input field  
+2. Click **"Analyze"**  
+3. Get your results:
+   - Legitimacy score (0–100%)
    - Risk assessment
-   - Product details
-   - Expert analysis
+   - Product metadata
+   - AI-based review insights
 
 ## Project Structure
 
 ```
 product-legitimacy-checker/
 ├── data/                          # Data storage
-├── models/                        # Trained ML models
-├── notebooks/                     # Jupyter Notebooks
-├── utils/                         # Utilities
-├── src/                           # Source code
-├── frontend/                      # Web interface
-└── api_docs/                      # API documentation
+├── models/                        # Trained BERT model and tokenizer
+├── notebooks/                     # Jupyter Notebooks for experimentation
+├── utils/                         # Utility functions
+├── src/                           # Core logic and scripts
+├── frontend/                      # HTML/CSS for the web interface
+├── bert_fake_review_classifier.py# Training script for BERT
+├── app.py                         # Flask application
+└── api_docs/                      # Optional API documentation
 ```
 
 ## Dependencies
 
-- Flask
-- BeautifulSoup4
-- Scikit-learn
-- Requests
-- Pandas
-- Joblib
+- Flask  
+- BeautifulSoup4  
+- Scikit-learn  
+- HuggingFace Transformers  
+- Requests  
+- Pandas  
+- Joblib  
+- Torch  
 
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
+1. Fork the repository  
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)  
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)  
+4. Push to the branch (`git push origin feature/AmazingFeature`)  
 5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Disclaimer
 
-This tool is for educational purposes only. Please respect Amazon's terms of service and robots.txt when using this application. 
+> This tool is for **educational and research** purposes only. Please use it responsibly and respect [Amazon's terms of service](https://www.amazon.in/gp/help/customer/display.html?nodeId=508088) and `robots.txt` policies when scraping data.

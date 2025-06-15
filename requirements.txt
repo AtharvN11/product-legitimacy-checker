@@ -1,33 +1,25 @@
-# Web Scraping
-beautifulsoup4==4.12.2
-requests==2.31.0
-selenium==4.15.2
+beautifulsoup4
+requests
+selenium
+undetected-chromedriver
 
-# Machine Learning
-scikit-learn==1.3.2
-numpy==1.26.2
-pandas==2.1.3
-transformers==4.35.2
-torch==2.1.2
+scikit-learn
+numpy
+pandas
+transformers
+torch
 
-# Text Processing
-nltk==3.8.1
-spacy==3.7.2
+nltk
 
-# Web Framework
-flask==3.0.0
-flask-cors==4.0.0
+flask
+flask-cors
+python-dotenv
+tqdm
+joblib
 
-# Utilities
-python-dotenv==1.0.0
-tqdm==4.66.1
-joblib==1.3.2
+pytest
+black
+flake8
+numpy
 
-# Development
-pytest==7.4.3
-black==23.11.0
-flake8==6.1.0
-
-# Add these lines to your existing requirements.txt
-undetected-chromedriver>=3.5.0
-selenium>=4.15.2 
+gunicorn
