@@ -22,7 +22,7 @@ df_fake = pd.read_csv("Fake.csv")
 df_existing = pd.read_csv("test.csv")
 
 # Process fake reviews dataset
-df_fake.rename(columns={"text": "text", "label": "fake_label"}, inplace=True)
+df_fake.rename(columns={"text_": "text_", "label": "fake_label"}, inplace=True)
 df_fake["fake_label"] = df_fake["fake_label"].map({"fake": 1, "genuine": 0})
 df_fake["malicious"] = 0
 df_fake["unworthy"] = 0
@@ -30,34 +30,38 @@ df_fake["unworthy"] = 0
 # Process existing dataset
 label_map = {1: "Very Bad", 2: "Bad", 3: "Neutral", 4: "Good", 5: "Very Good"}
 df_existing["class_index"] = df_existing["class_index"].map(label_map)
-df_existing["text"] = df_existing.apply(lambda x: " ".join(filter(None, [str(x.get("review_title", "")), str(x.get("review_text", ""))])), axis=1)
-df_existing = df_existing[df_existing["text"].str.strip().astype(bool)]
+df_existing["text_"] = df_existing.apply(lambda x: " ".join(filter(None, [str(x.get("review_title", "")), str(x.get("review_text_", ""))])), axis=1)
+df_existing = df_existing[df_existing["text_"].str.strip().astype(bool)]
 df_existing["malicious"] = df_existing["class_index"].isin(["Very Bad", "Bad"]).astype(int)
 df_existing["unworthy"] = df_existing["class_index"].isin(["Neutral"]).astype(int)
 df_existing["fake_label"] = 0
-
+print(df_fake.columns)
 # Combine datasets
-df_combined = pd.concat([df_existing[["text", "malicious", "unworthy", "fake_label"]],
-                         df_fake[["text", "malicious", "unworthy", "fake_label"]]], ignore_index=True)
-df_combined.dropna(subset=["text"], inplace=True)
-df_combined.drop_duplicates(subset=["text"], inplace=True)
+df_combined = pd.concat([df_existing[["text_", "malicious", "unworthy", "fake_label"]],
+df_fake[["text_", "malicious", "unworthy", "fake_label"]]], ignore_index=True)
+df_combined.dropna(subset=["text_"], inplace=True)
+df_combined.drop_duplicates(subset=["text_"], inplace=True)
+# ...existing code...
+
+df_combined.dropna(subset=["malicious", "unworthy", "fake_label"], inplace=True)
 
 # Split
 X_train, X_test, y_train, y_test = train_test_split(
-    df_combined["text"],
+    df_combined["text_"],
     df_combined[["malicious", "unworthy", "fake_label"]],
     test_size=0.2,
     stratify=df_combined[["malicious", "unworthy", "fake_label"]],
     random_state=42
 )
+# ...existing code...
 
 # Tokenizer
 tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
 # Dataset
 class ReviewDataset(Dataset):
-    def __init__(self, texts, labels):
-        self.encodings = tokenizer(texts.tolist(), truncation=True, padding="max_length", max_length=MAX_LEN)
+    def __init__(self, text_s, labels):
+        self.encodings = tokenizer(text_s.tolist(), truncation=True, padding="max_length", max_length=MAX_LEN)
         self.labels = torch.tensor(labels.values, dtype=torch.float)
 
     def __len__(self):
